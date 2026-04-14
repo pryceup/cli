@@ -151,6 +151,87 @@ func TestBaseFieldExecuteUpdate(t *testing.T) {
 	}
 }
 
+func TestBaseObjectJSONShortcutsRejectArrayInDryRun(t *testing.T) {
+	tests := []struct {
+		name     string
+		shortcut common.Shortcut
+		args     []string
+	}{
+		{
+			name:     "field create",
+			shortcut: BaseFieldCreate,
+			args:     []string{"+field-create", "--base-token", "app_x", "--table-id", "tbl_x", "--json", `[]`, "--dry-run"},
+		},
+		{
+			name:     "field update",
+			shortcut: BaseFieldUpdate,
+			args:     []string{"+field-update", "--base-token", "app_x", "--table-id", "tbl_x", "--field-id", "fld_x", "--json", `[]`, "--dry-run"},
+		},
+		{
+			name:     "record search",
+			shortcut: BaseRecordSearch,
+			args:     []string{"+record-search", "--base-token", "app_x", "--table-id", "tbl_x", "--json", `[]`, "--dry-run"},
+		},
+		{
+			name:     "record upsert",
+			shortcut: BaseRecordUpsert,
+			args:     []string{"+record-upsert", "--base-token", "app_x", "--table-id", "tbl_x", "--json", `[]`, "--dry-run"},
+		},
+		{
+			name:     "record batch create",
+			shortcut: BaseRecordBatchCreate,
+			args:     []string{"+record-batch-create", "--base-token", "app_x", "--table-id", "tbl_x", "--json", `[]`, "--dry-run"},
+		},
+		{
+			name:     "record batch update",
+			shortcut: BaseRecordBatchUpdate,
+			args:     []string{"+record-batch-update", "--base-token", "app_x", "--table-id", "tbl_x", "--json", `[]`, "--dry-run"},
+		},
+		{
+			name:     "view set filter",
+			shortcut: BaseViewSetFilter,
+			args:     []string{"+view-set-filter", "--base-token", "app_x", "--table-id", "tbl_x", "--view-id", "vew_x", "--json", `[]`, "--dry-run"},
+		},
+		{
+			name:     "view set visible fields",
+			shortcut: BaseViewSetVisibleFields,
+			args:     []string{"+view-set-visible-fields", "--base-token", "app_x", "--table-id", "tbl_x", "--view-id", "vew_x", "--json", `[]`, "--dry-run"},
+		},
+		{
+			name:     "view set card",
+			shortcut: BaseViewSetCard,
+			args:     []string{"+view-set-card", "--base-token", "app_x", "--table-id", "tbl_x", "--view-id", "vew_x", "--json", `[]`, "--dry-run"},
+		},
+		{
+			name:     "view set timebar",
+			shortcut: BaseViewSetTimebar,
+			args:     []string{"+view-set-timebar", "--base-token", "app_x", "--table-id", "tbl_x", "--view-id", "vew_x", "--json", `[]`, "--dry-run"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			factory, stdout, _ := newExecuteFactory(t)
+			err := runShortcut(t, tt.shortcut, tt.args, factory, stdout)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), "--json must be a JSON object") {
+				t.Fatalf("err=%v", err)
+			}
+			if !strings.Contains(err.Error(), "lark-base skill") {
+				t.Fatalf("err=%v", err)
+			}
+			if strings.Contains(err.Error(), "array") {
+				t.Fatalf("err should not mention array: %v", err)
+			}
+			if got := stdout.String(); got != "" {
+				t.Fatalf("stdout=%q, want empty", got)
+			}
+		})
+	}
+}
+
 func TestBaseTableExecuteCreate(t *testing.T) {
 	factory, stdout, reg := newExecuteFactory(t)
 	reg.Register(&httpmock.Stub{
@@ -259,7 +340,7 @@ func TestBaseViewExecutePropertyActions(t *testing.T) {
 				"data": []interface{}{map[string]interface{}{"field": "fld_status", "desc": false}},
 			},
 		})
-		if err := runShortcut(t, BaseViewSetGroup, []string{"+view-set-group", "--base-token", "app_x", "--table-id", "tbl_x", "--view-id", "vew_x", "--json", `[{"field":"fld_status","desc":false}]`}, factory, stdout); err != nil {
+		if err := runShortcut(t, BaseViewSetGroup, []string{"+view-set-group", "--base-token", "app_x", "--table-id", "tbl_x", "--view-id", "vew_x", "--json", `{"group_config":[{"field":"fld_status","desc":false}]}`}, factory, stdout); err != nil {
 			t.Fatalf("err=%v", err)
 		}
 		if got := stdout.String(); !strings.Contains(got, `"group"`) || !strings.Contains(got, `"fld_status"`) {
@@ -277,7 +358,7 @@ func TestBaseViewExecutePropertyActions(t *testing.T) {
 				"data": []interface{}{map[string]interface{}{"field": "fld_amount", "desc": true}},
 			},
 		})
-		if err := runShortcut(t, BaseViewSetSort, []string{"+view-set-sort", "--base-token", "app_x", "--table-id", "tbl_x", "--view-id", "vew_x", "--json", `[{"field":"fld_amount","desc":true}]`}, factory, stdout); err != nil {
+		if err := runShortcut(t, BaseViewSetSort, []string{"+view-set-sort", "--base-token", "app_x", "--table-id", "tbl_x", "--view-id", "vew_x", "--json", `{"sort_config":[{"field":"fld_amount","desc":true}]}`}, factory, stdout); err != nil {
 			t.Fatalf("err=%v", err)
 		}
 		if got := stdout.String(); !strings.Contains(got, `"sort"`) || !strings.Contains(got, `"fld_amount"`) {
@@ -1203,7 +1284,7 @@ func TestBaseViewExecuteReadCreateDeleteAndFilter(t *testing.T) {
 			factory,
 			stdout,
 		)
-		if err == nil || !strings.Contains(err.Error(), "invalid JSON object") {
+		if err == nil || !strings.Contains(err.Error(), "--json must be a JSON object") {
 			t.Fatalf("err=%v", err)
 		}
 	})
