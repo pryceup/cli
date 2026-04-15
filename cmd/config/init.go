@@ -33,6 +33,9 @@ type ConfigInitOptions struct {
 	Lang           string
 	langExplicit   bool   // true when --lang was explicitly passed
 	ProfileName    string // when set, create/update a named profile instead of replacing Apps[0]
+	OpenURL        string // custom Open API base URL (for private deployment)
+	AccountsURL    string // custom Accounts base URL (for private deployment)
+	McpURL         string // custom MCP base URL (for private deployment)
 }
 
 // NewCmdConfigInit creates the config init subcommand.
@@ -63,6 +66,9 @@ verification URL from its output.`,
 	cmd.Flags().StringVar(&opts.Brand, "brand", "feishu", "feishu or lark (non-interactive, default feishu)")
 	cmd.Flags().StringVar(&opts.Lang, "lang", "zh", "language for interactive prompts (zh or en)")
 	cmd.Flags().StringVar(&opts.ProfileName, "name", "", "create or update a named profile (append instead of replace)")
+	cmd.Flags().StringVar(&opts.OpenURL, "open-url", "", "custom Open API base URL (for private deployment)")
+	cmd.Flags().StringVar(&opts.AccountsURL, "accounts-url", "", "custom Accounts base URL (for private deployment)")
+	cmd.Flags().StringVar(&opts.McpURL, "mcp-url", "", "custom MCP base URL (for private deployment)")
 
 	return cmd
 }
@@ -89,10 +95,10 @@ func cleanupOldConfig(existing *core.MultiAppConfig, f *cmdutil.Factory, skipApp
 }
 
 // saveAsOnlyApp overwrites config.json with a single-app config.
-func saveAsOnlyApp(appId string, secret core.SecretInput, brand core.LarkBrand, lang string) error {
+func saveAsOnlyApp(appId string, secret core.SecretInput, brand core.LarkBrand, lang string, endpoints *core.Endpoints) error {
 	config := &core.MultiAppConfig{
 		Apps: []core.AppConfig{{
-			AppId: appId, AppSecret: secret, Brand: brand, Lang: lang, Users: []core.AppUser{},
+			AppId: appId, AppSecret: secret, Brand: brand, Lang: lang, Endpoints: endpoints, Users: []core.AppUser{},
 		}},
 	}
 	return core.SaveMultiAppConfig(config)
@@ -101,18 +107,18 @@ func saveAsOnlyApp(appId string, secret core.SecretInput, brand core.LarkBrand, 
 // saveInitConfig saves a new/updated app config, respecting --profile mode.
 // With profileName: appends or updates the named profile (preserves other profiles).
 // Without profileName: cleans up old config and saves as the only app.
-func saveInitConfig(profileName string, existing *core.MultiAppConfig, f *cmdutil.Factory, appId string, secret core.SecretInput, brand core.LarkBrand, lang string) error {
+func saveInitConfig(profileName string, existing *core.MultiAppConfig, f *cmdutil.Factory, appId string, secret core.SecretInput, brand core.LarkBrand, lang string, endpoints *core.Endpoints) error {
 	if profileName != "" {
-		return saveAsProfile(existing, f.Keychain, profileName, appId, secret, brand, lang)
+		return saveAsProfile(existing, f.Keychain, profileName, appId, secret, brand, lang, endpoints)
 	}
 	cleanupOldConfig(existing, f, appId)
-	return saveAsOnlyApp(appId, secret, brand, lang)
+	return saveAsOnlyApp(appId, secret, brand, lang, endpoints)
 }
 
 // saveAsProfile appends or updates a named profile in the config.
 // If a profile with the same name exists, it updates it; otherwise appends.
 // When updating, cleans up old keychain secrets if AppId changed.
-func saveAsProfile(existing *core.MultiAppConfig, kc keychain.KeychainAccess, profileName, appId string, secret core.SecretInput, brand core.LarkBrand, lang string) error {
+func saveAsProfile(existing *core.MultiAppConfig, kc keychain.KeychainAccess, profileName, appId string, secret core.SecretInput, brand core.LarkBrand, lang string, endpoints *core.Endpoints) error {
 	multi := existing
 	if multi == nil {
 		multi = &core.MultiAppConfig{}
@@ -132,6 +138,7 @@ func saveAsProfile(existing *core.MultiAppConfig, kc keychain.KeychainAccess, pr
 		multi.Apps[idx].AppSecret = secret
 		multi.Apps[idx].Brand = brand
 		multi.Apps[idx].Lang = lang
+		multi.Apps[idx].Endpoints = endpoints
 	} else {
 		if findAppIndexByAppID(multi, profileName) >= 0 {
 			return fmt.Errorf("profile name %q conflicts with existing appId", profileName)
@@ -143,6 +150,7 @@ func saveAsProfile(existing *core.MultiAppConfig, kc keychain.KeychainAccess, pr
 			AppSecret: secret,
 			Brand:     brand,
 			Lang:      lang,
+			Endpoints: endpoints,
 			Users:     []core.AppUser{},
 		})
 	}
@@ -202,6 +210,18 @@ func updateExistingProfileWithoutSecret(existing *core.MultiAppConfig, profileNa
 	return core.SaveMultiAppConfig(existing)
 }
 
+// buildEndpointsOverride constructs custom Endpoints from CLI flags, or nil if none set.
+func buildEndpointsOverride(opts *ConfigInitOptions) *core.Endpoints {
+	if opts.OpenURL == "" && opts.AccountsURL == "" && opts.McpURL == "" {
+		return nil
+	}
+	return &core.Endpoints{
+		Open:     opts.OpenURL,
+		Accounts: opts.AccountsURL,
+		MCP:      opts.McpURL,
+	}
+}
+
 func configInitRun(opts *ConfigInitOptions) error {
 	f := opts.Factory
 
@@ -232,6 +252,14 @@ func configInitRun(opts *ConfigInitOptions) error {
 		}
 	}
 
+	// Validate custom endpoint URLs if provided
+	for _, u := range []string{opts.OpenURL, opts.AccountsURL, opts.McpURL} {
+		if err := core.ValidateEndpointURL(u); err != nil {
+			return output.ErrValidation("%v", err)
+		}
+	}
+	endpointsOverride := buildEndpointsOverride(opts)
+
 	// Mode 1: Non-interactive
 	if opts.AppID != "" && opts.appSecret != "" {
 		brand := parseBrand(opts.Brand)
@@ -239,7 +267,7 @@ func configInitRun(opts *ConfigInitOptions) error {
 		if err != nil {
 			return output.Errorf(output.ExitInternal, "internal", "%v", err)
 		}
-		if err := saveInitConfig(opts.ProfileName, existing, f, opts.AppID, secret, brand, opts.Lang); err != nil {
+		if err := saveInitConfig(opts.ProfileName, existing, f, opts.AppID, secret, brand, opts.Lang, endpointsOverride); err != nil {
 			return output.Errorf(output.ExitInternal, "internal", "failed to save config: %v", err)
 		}
 		output.PrintSuccess(f.IOStreams.ErrOut, fmt.Sprintf("Configuration saved to %s", core.GetConfigPath()))
@@ -281,7 +309,7 @@ func configInitRun(opts *ConfigInitOptions) error {
 		if err != nil {
 			return output.Errorf(output.ExitInternal, "internal", "%v", err)
 		}
-		if err := saveInitConfig(opts.ProfileName, existing, f, result.AppID, secret, result.Brand, opts.Lang); err != nil {
+		if err := saveInitConfig(opts.ProfileName, existing, f, result.AppID, secret, result.Brand, opts.Lang, endpointsOverride); err != nil {
 			return output.Errorf(output.ExitInternal, "internal", "failed to save config: %v", err)
 		}
 		output.PrintJson(f.IOStreams.Out, map[string]interface{}{"appId": result.AppID, "appSecret": "****", "brand": result.Brand})
@@ -306,7 +334,7 @@ func configInitRun(opts *ConfigInitOptions) error {
 			if err != nil {
 				return output.Errorf(output.ExitInternal, "internal", "%v", err)
 			}
-			if err := saveInitConfig(opts.ProfileName, existing, f, result.AppID, secret, result.Brand, opts.Lang); err != nil {
+			if err := saveInitConfig(opts.ProfileName, existing, f, result.AppID, secret, result.Brand, opts.Lang, endpointsOverride); err != nil {
 				return output.Errorf(output.ExitInternal, "internal", "failed to save config: %v", err)
 			}
 		} else if result.Mode == "existing" && result.AppID != "" {
@@ -407,7 +435,7 @@ func configInitRun(opts *ConfigInitOptions) error {
 	if err != nil {
 		return output.Errorf(output.ExitInternal, "internal", "%v", err)
 	}
-	if err := saveInitConfig(opts.ProfileName, existing, f, resolvedAppId, storedSecret, parseBrand(resolvedBrand), opts.Lang); err != nil {
+	if err := saveInitConfig(opts.ProfileName, existing, f, resolvedAppId, storedSecret, parseBrand(resolvedBrand), opts.Lang, endpointsOverride); err != nil {
 		return output.Errorf(output.ExitInternal, "internal", "failed to save config: %v", err)
 	}
 	output.PrintSuccess(f.IOStreams.ErrOut, fmt.Sprintf("Configuration saved to %s", core.GetConfigPath()))

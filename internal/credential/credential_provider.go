@@ -229,7 +229,7 @@ func (p *CredentialProvider) enrichUserInfo(ctx context.Context, acct *Account, 
 	if err != nil {
 		return fmt.Errorf("failed to get HTTP client for user_info: %w", err)
 	}
-	info, err := fetchUserInfo(ctx, hc, acct.Brand, tok.Token)
+	info, err := fetchUserInfo(ctx, hc, acct.Endpoints, tok.Token)
 	if err != nil {
 		return fmt.Errorf("failed to verify user identity: %w", err)
 	}

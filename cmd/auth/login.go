@@ -6,7 +6,9 @@ package auth
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
 	"sort"
 	"strings"
 	"time"
@@ -24,14 +26,15 @@ import (
 
 // LoginOptions holds all inputs for auth login.
 type LoginOptions struct {
-	Factory    *cmdutil.Factory
-	Ctx        context.Context
-	JSON       bool
-	Scope      string
-	Recommend  bool
-	Domains    []string
-	NoWait     bool
-	DeviceCode string
+	Factory      *cmdutil.Factory
+	Ctx          context.Context
+	JSON         bool
+	Scope        string
+	Recommend    bool
+	Domains      []string
+	NoWait       bool
+	DeviceCode   string
+	CallbackPort int // localhost port for authorization code flow callback
 }
 
 var pollDeviceToken = larkauth.PollDeviceToken
@@ -71,6 +74,7 @@ browser. Run it in the background and retrieve the verification URL from its out
 	cmd.Flags().BoolVar(&opts.JSON, "json", false, "structured JSON output")
 	cmd.Flags().BoolVar(&opts.NoWait, "no-wait", false, "initiate device authorization and return immediately; use --device-code to complete")
 	cmd.Flags().StringVar(&opts.DeviceCode, "device-code", "", "poll and complete authorization with a device code from a previous --no-wait call")
+	cmd.Flags().IntVar(&opts.CallbackPort, "callback-port", 3000, "localhost port for authorization code flow callback")
 
 	_ = cmd.RegisterFlagCompletionFunc("domain", func(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		return completeDomain(toComplete), cobra.ShellCompDirectiveNoFileComp
@@ -219,8 +223,14 @@ func authLoginRun(opts *LoginOptions) error {
 	if err != nil {
 		return err
 	}
-	authResp, err := larkauth.RequestDeviceAuthorization(httpClient, config.AppID, config.AppSecret, config.Brand, finalScope, f.IOStreams.ErrOut)
+	authResp, err := larkauth.RequestDeviceAuthorization(httpClient, config.AppID, config.AppSecret, config.Endpoints, finalScope, f.IOStreams.ErrOut)
 	if err != nil {
+		// If device flow is not supported (e.g. private deployment), fallback to authorization code flow
+		var unsupported *larkauth.DeviceFlowUnsupportedError
+		if errors.As(err, &unsupported) {
+			log("Device flow not supported, falling back to authorization code flow...")
+			return authLoginWithAuthCode(opts, config, httpClient, finalScope, msg, log)
+		}
 		return output.ErrAuth("device authorization failed: %v", err)
 	}
 
@@ -264,7 +274,7 @@ func authLoginRun(opts *LoginOptions) error {
 
 	// Step 3: Poll for token
 	log(msg.WaitingAuth)
-	result := pollDeviceToken(opts.Ctx, httpClient, config.AppID, config.AppSecret, config.Brand,
+	result := pollDeviceToken(opts.Ctx, httpClient, config.AppID, config.AppSecret, config.Endpoints,
 		authResp.DeviceCode, authResp.Interval, authResp.ExpiresIn, f.IOStreams.ErrOut)
 
 	if !result.OK {
@@ -347,7 +357,7 @@ func authLoginPollDeviceCode(opts *LoginOptions, config *core.CliConfig, msg *lo
 		}
 	}
 	log(msg.WaitingAuth)
-	result := pollDeviceToken(opts.Ctx, httpClient, config.AppID, config.AppSecret, config.Brand,
+	result := pollDeviceToken(opts.Ctx, httpClient, config.AppID, config.AppSecret, config.Endpoints,
 		opts.DeviceCode, 5, 180, f.IOStreams.ErrOut)
 
 	if !result.OK {
@@ -435,6 +445,67 @@ func findProfileByName(multi *core.MultiAppConfig, profileName string) *core.App
 			return &multi.Apps[i]
 		}
 	}
+	return nil
+}
+
+// authLoginWithAuthCode handles login via authorization code flow.
+// Used as fallback when device flow is not supported (e.g. private deployments).
+func authLoginWithAuthCode(opts *LoginOptions, config *core.CliConfig, httpClient *http.Client, finalScope string, msg *loginMsg, log func(string, ...interface{})) error {
+	f := opts.Factory
+
+	result, err := larkauth.RunAuthCodeFlow(opts.Ctx, httpClient,
+		config.AppID, config.AppSecret, config.Endpoints, finalScope,
+		opts.CallbackPort, f.IOStreams.ErrOut)
+	if err != nil {
+		return output.ErrAuth("authorization code flow failed: %v", err)
+	}
+	if !result.OK {
+		return output.ErrAuth("authorization failed: %s", result.Message)
+	}
+	if result.Token == nil {
+		return output.ErrAuth("authorization succeeded but no token returned")
+	}
+
+	// Get user info
+	log(msg.AuthSuccess)
+	sdk, err := f.LarkClient()
+	if err != nil {
+		return output.ErrAuth("failed to get SDK: %v", err)
+	}
+	openId, userName, err := getUserInfo(opts.Ctx, sdk, result.Token.AccessToken)
+	if err != nil {
+		return output.ErrAuth("failed to get user info: %v", err)
+	}
+
+	scopeSummary := loadLoginScopeSummary(config.AppID, openId, finalScope, result.Token.Scope)
+
+	// Store token
+	now := time.Now().UnixMilli()
+	storedToken := &larkauth.StoredUAToken{
+		UserOpenId:       openId,
+		AppId:            config.AppID,
+		AccessToken:      result.Token.AccessToken,
+		RefreshToken:     result.Token.RefreshToken,
+		ExpiresAt:        now + int64(result.Token.ExpiresIn)*1000,
+		RefreshExpiresAt: now + int64(result.Token.RefreshExpiresIn)*1000,
+		Scope:            result.Token.Scope,
+		GrantedAt:        now,
+	}
+	if err := larkauth.SetStoredToken(storedToken); err != nil {
+		return output.Errorf(output.ExitInternal, "internal", "failed to save token: %v", err)
+	}
+
+	// Update config
+	if err := syncLoginUserToProfile(config.ProfileName, config.AppID, openId, userName); err != nil {
+		_ = larkauth.RemoveStoredToken(config.AppID, openId)
+		return output.Errorf(output.ExitInternal, "internal", "failed to update login profile: %v", err)
+	}
+
+	if issue := ensureRequestedScopesGranted(finalScope, result.Token.Scope, msg, scopeSummary); issue != nil {
+		return handleLoginScopeIssue(opts, msg, f, issue, openId, userName)
+	}
+
+	writeLoginSuccess(opts, msg, f, openId, userName, scopeSummary)
 	return nil
 }
 

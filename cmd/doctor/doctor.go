@@ -101,7 +101,7 @@ func doctorRun(opts *DoctorOptions) error {
 	}
 	checks = append(checks, pass("app_resolved", fmt.Sprintf("app: %s (%s)", cfg.AppID, cfg.Brand)))
 
-	ep := core.ResolveEndpoints(cfg.Brand)
+	ep := cfg.Endpoints
 
 	// ── 3. Token exists ──
 	if cfg.UserOpenId == "" {

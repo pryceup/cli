@@ -484,6 +484,7 @@ func TestRemoteMetaURL_BrandSpecific(t *testing.T) {
 
 	// Default URL (feishu) with no version
 	configuredBrand = core.BrandFeishu
+	configuredEndpoints = core.ResolveEndpoints(core.BrandFeishu)
 	u := remoteMetaURL("")
 	if !strings.Contains(u, "open.feishu.cn") {
 		t.Errorf("expected feishu URL, got %s", u)
@@ -494,12 +495,20 @@ func TestRemoteMetaURL_BrandSpecific(t *testing.T) {
 
 	// Lark brand with version param
 	configuredBrand = core.BrandLark
+	configuredEndpoints = core.ResolveEndpoints(core.BrandLark)
 	u = remoteMetaURL("1.0.3")
 	if !strings.Contains(u, "open.larksuite.com") {
 		t.Errorf("expected lark URL, got %s", u)
 	}
 	if !strings.Contains(u, "data_version=1.0.3") {
 		t.Errorf("expected data_version=1.0.3, got %s", u)
+	}
+
+	// Custom endpoints
+	configuredEndpoints = core.Endpoints{Open: "https://open.xfchat.iflytek.com"}
+	u = remoteMetaURL("")
+	if !strings.Contains(u, "open.xfchat.iflytek.com") {
+		t.Errorf("expected custom URL, got %s", u)
 	}
 
 	// testMetaURL override takes precedence

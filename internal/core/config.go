@@ -45,6 +45,7 @@ type AppConfig struct {
 	Lang       string      `json:"lang,omitempty"`
 	DefaultAs  Identity    `json:"defaultAs,omitempty"` // AsUser | AsBot | AsAuto
 	StrictMode *StrictMode `json:"strictMode,omitempty"`
+	Endpoints  *Endpoints  `json:"endpoints,omitempty"` // Custom domain override for private deployment
 	Users      []AppUser   `json:"users"`
 }
 
@@ -158,6 +159,7 @@ type CliConfig struct {
 	AppSecret           string
 	Brand               LarkBrand
 	DefaultAs           Identity // AsUser | AsBot | AsAuto | "" (from config file)
+	Endpoints           Endpoints // Always populated (brand defaults + override)
 	UserOpenId          string
 	UserName            string
 	SupportedIdentities uint8 `json:"-"` // bitflag: 1=user, 2=bot; set by credential provider
@@ -272,6 +274,7 @@ func ResolveConfigFromMulti(raw *MultiAppConfig, kc keychain.KeychainAccess, pro
 		AppSecret:   secret,
 		Brand:       app.Brand,
 		DefaultAs:   app.DefaultAs,
+		Endpoints:   ResolveEndpointsWithOverride(app.Brand, app.Endpoints),
 	}
 	if len(app.Users) > 0 {
 		cfg.UserOpenId = app.Users[0].UserOpenId

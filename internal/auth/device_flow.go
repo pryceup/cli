@@ -50,9 +50,17 @@ type OAuthEndpoints struct {
 	Token               string
 }
 
-// ResolveOAuthEndpoints resolves OAuth endpoint URLs based on brand.
-func ResolveOAuthEndpoints(brand core.LarkBrand) OAuthEndpoints {
-	ep := core.ResolveEndpoints(brand)
+// DeviceFlowUnsupportedError indicates the server does not support device flow.
+type DeviceFlowUnsupportedError struct {
+	StatusCode int
+}
+
+func (e *DeviceFlowUnsupportedError) Error() string {
+	return fmt.Sprintf("device flow not supported (HTTP %d)", e.StatusCode)
+}
+
+// ResolveOAuthEndpoints resolves OAuth endpoint URLs based on endpoints.
+func ResolveOAuthEndpoints(ep core.Endpoints) OAuthEndpoints {
 	return OAuthEndpoints{
 		DeviceAuthorization: ep.Accounts + PathDeviceAuthorization,
 		Token:               ep.Open + PathOAuthTokenV2,
@@ -60,12 +68,12 @@ func ResolveOAuthEndpoints(brand core.LarkBrand) OAuthEndpoints {
 }
 
 // RequestDeviceAuthorization requests a device authorization code.
-func RequestDeviceAuthorization(httpClient *http.Client, appId, appSecret string, brand core.LarkBrand, scope string, errOut io.Writer) (*DeviceAuthResponse, error) {
+func RequestDeviceAuthorization(httpClient *http.Client, appId, appSecret string, ep core.Endpoints, scope string, errOut io.Writer) (*DeviceAuthResponse, error) {
 	if errOut == nil {
 		errOut = io.Discard
 	}
 
-	endpoints := ResolveOAuthEndpoints(brand)
+	endpoints := ResolveOAuthEndpoints(ep)
 
 	if !strings.Contains(scope, "offline_access") {
 		if scope != "" {
@@ -102,11 +110,17 @@ func RequestDeviceAuthorization(httpClient *http.Client, appId, appSecret string
 
 	var data map[string]interface{}
 	if err := json.Unmarshal(body, &data); err != nil {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, &DeviceFlowUnsupportedError{StatusCode: resp.StatusCode}
+		}
 		return nil, fmt.Errorf("Device authorization failed: HTTP %d – response not JSON", resp.StatusCode)
 	}
 
 	_, hasError := data["error"]
 	if resp.StatusCode >= 400 || hasError {
+		if resp.StatusCode == http.StatusNotFound {
+			return nil, &DeviceFlowUnsupportedError{StatusCode: resp.StatusCode}
+		}
 		msg := getStr(data, "error_description")
 		if msg == "" {
 			msg = getStr(data, "error")
@@ -137,7 +151,7 @@ func RequestDeviceAuthorization(httpClient *http.Client, appId, appSecret string
 }
 
 // PollDeviceToken polls the token endpoint until authorization completes or times out.
-func PollDeviceToken(ctx context.Context, httpClient *http.Client, appId, appSecret string, brand core.LarkBrand, deviceCode string, interval, expiresIn int, errOut io.Writer) *DeviceFlowResult {
+func PollDeviceToken(ctx context.Context, httpClient *http.Client, appId, appSecret string, ep core.Endpoints, deviceCode string, interval, expiresIn int, errOut io.Writer) *DeviceFlowResult {
 	if errOut == nil {
 		errOut = io.Discard
 	}
@@ -145,7 +159,7 @@ func PollDeviceToken(ctx context.Context, httpClient *http.Client, appId, appSec
 	const maxPollInterval = 60
 	const maxPollAttempts = 200
 
-	endpoints := ResolveOAuthEndpoints(brand)
+	endpoints := ResolveOAuthEndpoints(ep)
 	deadline := time.Now().Add(time.Duration(expiresIn) * time.Second)
 	currentInterval := interval
 	attempts := 0

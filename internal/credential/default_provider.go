@@ -132,7 +132,7 @@ func (p *DefaultTokenProvider) doResolveTAT(ctx context.Context) (*TokenResult, 
 	if err != nil {
 		return nil, err
 	}
-	ep := core.ResolveEndpoints(acct.Brand)
+	ep := acct.Endpoints
 	url := ep.Open + "/open-apis/auth/v3/tenant_access_token/internal"
 
 	body, err := json.Marshal(map[string]string{

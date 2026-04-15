@@ -49,6 +49,9 @@ type remoteResponse struct {
 // configuredBrand is set by InitWithBrand and determines which API host to use.
 var configuredBrand core.LarkBrand
 
+// configuredEndpoints is set by InitWithEndpoints and used for remote meta URL.
+var configuredEndpoints core.Endpoints
+
 // --- configuration helpers ---
 
 // enableRemoteMeta controls whether remote API meta fetching is active.
@@ -69,13 +72,12 @@ func remoteMetaURL(version string) string {
 	if testMetaURL != "" {
 		return testMetaURL
 	}
-	var base string
-	switch configuredBrand {
-	case core.BrandLark:
-		base = "https://open.larksuite.com/api/tools/open/api_definition"
-	default:
-		base = "https://open.feishu.cn/api/tools/open/api_definition"
+	base := configuredEndpoints.Open
+	if base == "" {
+		// Fallback to brand-based resolution if endpoints not set
+		base = core.ResolveEndpoints(configuredBrand).Open
 	}
+	base = base + "/api/tools/open/api_definition"
 	q := "protocol=meta&client_version=" + url.QueryEscape(build.Version)
 	if version != "" {
 		q += "&data_version=" + url.QueryEscape(version)

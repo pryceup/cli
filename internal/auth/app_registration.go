@@ -40,14 +40,19 @@ type AppRegUserInfo struct {
 }
 
 // RequestAppRegistration initiates the app registration device flow.
-func RequestAppRegistration(httpClient *http.Client, brand core.LarkBrand, errOut io.Writer) (*AppRegistrationResponse, error) {
+func RequestAppRegistration(httpClient *http.Client, ep core.Endpoints, errOut io.Writer) (*AppRegistrationResponse, error) {
 	if errOut == nil {
 		errOut = io.Discard
 	}
 
-	ep := core.ResolveEndpoints(brand)
-	regEp := core.ResolveEndpoints(core.BrandFeishu) // registration begin always uses feishu
-	endpoint := regEp.Accounts + PathAppRegistration
+	// For private deployments (custom endpoints), use configured accounts URL.
+	// For standard deployments, registration begin always uses feishu.
+	regAccounts := core.ResolveEndpoints(core.BrandFeishu).Accounts
+	if ep.Accounts != core.ResolveEndpoints(core.BrandFeishu).Accounts &&
+		ep.Accounts != core.ResolveEndpoints(core.BrandLark).Accounts {
+		regAccounts = ep.Accounts
+	}
+	endpoint := regAccounts + PathAppRegistration
 
 	form := url.Values{}
 	form.Set("action", "begin")
@@ -121,7 +126,7 @@ func BuildVerificationURL(baseURL, cliVersion string) string {
 // PollAppRegistration polls the app registration endpoint until the app is created or the flow times out.
 // If the result has ClientSecret == "" and UserInfo.TenantBrand == "lark", the caller should
 // retry with BrandLark to get the secret from accounts.larksuite.com.
-func PollAppRegistration(ctx context.Context, httpClient *http.Client, brand core.LarkBrand, deviceCode string, interval, expiresIn int, errOut io.Writer) (*AppRegistrationResult, error) {
+func PollAppRegistration(ctx context.Context, httpClient *http.Client, ep core.Endpoints, deviceCode string, interval, expiresIn int, errOut io.Writer) (*AppRegistrationResult, error) {
 	if errOut == nil {
 		errOut = io.Discard
 	}
@@ -129,7 +134,6 @@ func PollAppRegistration(ctx context.Context, httpClient *http.Client, brand cor
 	const maxPollInterval = 60
 	const maxPollAttempts = 200
 
-	ep := core.ResolveEndpoints(brand)
 	endpoint := ep.Accounts + PathAppRegistration
 	deadline := time.Now().Add(time.Duration(expiresIn) * time.Second)
 	currentInterval := interval

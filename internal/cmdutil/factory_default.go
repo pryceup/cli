@@ -67,7 +67,11 @@ func NewDefault(inv InvocationContext) *Factory {
 			return nil, err
 		}
 		cfg := acct.ToCliConfig()
-		registry.InitWithBrand(cfg.Brand)
+		// Fallback: if extension provider returned zero-value Endpoints, fill from brand
+		if cfg.Endpoints.Open == "" {
+			cfg.Endpoints = core.ResolveEndpoints(cfg.Brand)
+		}
+		registry.InitWithEndpoints(cfg.Endpoints)
 		return cfg, nil
 	})
 
@@ -127,8 +131,7 @@ func cachedLarkClientFunc(f *Factory) func() (*lark.Client, error) {
 			Transport:     buildSDKTransport(),
 			CheckRedirect: safeRedirectPolicy,
 		}))
-		ep := core.ResolveEndpoints(acct.Brand)
-		opts = append(opts, lark.WithOpenBaseUrl(ep.Open))
+		opts = append(opts, lark.WithOpenBaseUrl(acct.Endpoints.Open))
 		return lark.NewClient(acct.AppID, credential.RuntimeAppSecret(acct.AppSecret), opts...), nil
 	})
 }

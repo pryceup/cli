@@ -19,7 +19,7 @@ import (
 
 // TestResolveOAuthEndpoints_Feishu validates endpoints for the Feishu brand.
 func TestResolveOAuthEndpoints_Feishu(t *testing.T) {
-	ep := ResolveOAuthEndpoints(core.BrandFeishu)
+	ep := ResolveOAuthEndpoints(core.ResolveEndpoints(core.BrandFeishu))
 	if ep.DeviceAuthorization != "https://accounts.feishu.cn/oauth/v1/device_authorization" {
 		t.Errorf("DeviceAuthorization = %q", ep.DeviceAuthorization)
 	}
@@ -30,7 +30,7 @@ func TestResolveOAuthEndpoints_Feishu(t *testing.T) {
 
 // TestResolveOAuthEndpoints_Lark validates endpoints for the Lark brand.
 func TestResolveOAuthEndpoints_Lark(t *testing.T) {
-	ep := ResolveOAuthEndpoints(core.BrandLark)
+	ep := ResolveOAuthEndpoints(core.ResolveEndpoints(core.BrandLark))
 	if ep.DeviceAuthorization != "https://accounts.larksuite.com/oauth/v1/device_authorization" {
 		t.Errorf("DeviceAuthorization = %q", ep.DeviceAuthorization)
 	}
@@ -69,7 +69,7 @@ func TestRequestDeviceAuthorization_LogsResponse(t *testing.T) {
 	})
 	t.Cleanup(restore)
 
-	_, err := RequestDeviceAuthorization(httpmock.NewClient(reg), "cli_a", "secret_b", core.BrandFeishu, "", nil)
+	_, err := RequestDeviceAuthorization(httpmock.NewClient(reg), "cli_a", "secret_b", core.ResolveEndpoints(core.BrandFeishu), "", nil)
 	if err != nil {
 		t.Fatalf("RequestDeviceAuthorization() error: %v", err)
 	}

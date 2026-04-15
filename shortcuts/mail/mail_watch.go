@@ -23,7 +23,6 @@ import (
 
 	larkcore "github.com/larksuite/oapi-sdk-go/v3/core"
 
-	"github.com/larksuite/cli/internal/core"
 	"github.com/larksuite/cli/internal/output"
 	"github.com/larksuite/cli/internal/validate"
 	"github.com/larksuite/cli/internal/vfs"
@@ -414,7 +413,7 @@ var MailWatch = common.Shortcut{
 		eventDispatcher.InitConfig(larkevent.WithLogger(sdkLogger))
 		eventDispatcher.OnCustomizedEvent(mailEventType, rawHandler)
 
-		endpoints := core.ResolveEndpoints(runtime.Config.Brand)
+		endpoints := runtime.Config.Endpoints
 		domain := endpoints.Open
 
 		info("Connecting to Feishu event WebSocket...")

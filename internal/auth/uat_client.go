@@ -34,7 +34,7 @@ type UATCallOptions struct {
 	UserOpenId string
 	AppId      string
 	AppSecret  string
-	Domain     core.LarkBrand
+	Endpoints  core.Endpoints
 	ErrOut     io.Writer // diagnostic/status output (caller injects f.IOStreams.ErrOut)
 }
 
@@ -58,7 +58,7 @@ func NewUATCallOptions(cfg *core.CliConfig, errOut io.Writer) UATCallOptions {
 		UserOpenId: cfg.UserOpenId,
 		AppId:      cfg.AppID,
 		AppSecret:  cfg.AppSecret,
-		Domain:     cfg.Brand,
+		Endpoints:  cfg.Endpoints,
 		ErrOut:     errOut,
 	}
 }
@@ -184,7 +184,7 @@ func doRefreshToken(httpClient *http.Client, opts UATCallOptions, stored *Stored
 		return nil, nil
 	}
 
-	endpoints := ResolveOAuthEndpoints(opts.Domain)
+	endpoints := ResolveOAuthEndpoints(opts.Endpoints)
 
 	callEndpoint := func() (map[string]interface{}, error) {
 		form := url.Values{}

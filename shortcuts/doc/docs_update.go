@@ -83,7 +83,7 @@ var DocsUpdate = common.Shortcut{
 			args["new_title"] = v
 		}
 		return common.NewDryRunAPI().
-			POST(common.MCPEndpoint(runtime.Config.Brand)).
+			POST(common.MCPEndpoint(runtime.Config.Endpoints)).
 			Desc("MCP tool: update-doc").
 			Body(map[string]interface{}{"method": "tools/call", "params": map[string]interface{}{"name": "update-doc", "arguments": args}}).
 			Set("mcp_tool", "update-doc").Set("args", args)

@@ -9,6 +9,8 @@ const (
 	PathDeviceAuthorization = "/oauth/v1/device_authorization"
 	// PathAppRegistration is the endpoint for application registration.
 	PathAppRegistration = "/oauth/v1/app/registration"
+	// PathAuthorize is the endpoint for authorization code flow.
+	PathAuthorize = "/open-apis/authen/v1/authorize"
 	// PathOAuthTokenV2 is the endpoint for requesting an OAuth token (v2).
 	PathOAuthTokenV2 = "/open-apis/authen/v2/oauth/token"
 	// PathUserInfoV1 is the endpoint for fetching user information.

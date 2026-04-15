@@ -127,7 +127,7 @@ func (c *APIClient) DoStream(ctx context.Context, req *larkcore.ApiReq, as core.
 	}
 
 	// Build URL
-	requestURL, err := buildStreamURL(c.Config.Brand, req)
+	requestURL, err := buildStreamURL(c.Config.Endpoints, req)
 	if err != nil {
 		return nil, err
 	}
@@ -203,7 +203,7 @@ func (r *cancelOnCloseBody) Close() error {
 	return err
 }
 
-func buildStreamURL(brand core.LarkBrand, req *larkcore.ApiReq) (string, error) {
+func buildStreamURL(endpoints core.Endpoints, req *larkcore.ApiReq) (string, error) {
 	requestURL := req.ApiPath
 	if !strings.HasPrefix(requestURL, "http://") && !strings.HasPrefix(requestURL, "https://") {
 		var pathSegs []string
@@ -222,7 +222,6 @@ func buildStreamURL(brand core.LarkBrand, req *larkcore.ApiReq) (string, error) 
 			}
 			pathSegs = append(pathSegs, url.PathEscape(pathValue))
 		}
-		endpoints := core.ResolveEndpoints(brand)
 		requestURL = strings.TrimRight(endpoints.Open, "/") + strings.Join(pathSegs, "/")
 	}
 	if query := req.QueryParams.Encode(); query != "" {

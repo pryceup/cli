@@ -18,8 +18,7 @@ type userInfo struct {
 }
 
 // fetchUserInfo calls /open-apis/authen/v1/user_info with a UAT to get the user's identity.
-func fetchUserInfo(ctx context.Context, httpClient *http.Client, brand core.LarkBrand, uat string) (*userInfo, error) {
-	ep := core.ResolveEndpoints(brand)
+func fetchUserInfo(ctx context.Context, httpClient *http.Client, ep core.Endpoints, uat string) (*userInfo, error) {
 	url := ep.Open + "/open-apis/authen/v1/user_info"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)

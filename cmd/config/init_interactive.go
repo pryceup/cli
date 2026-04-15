@@ -169,7 +169,8 @@ func runCreateAppFlow(ctx context.Context, f *cmdutil.Factory, brandOverride cor
 
 	// Step 1: Request app registration (begin)
 	httpClient := &http.Client{}
-	authResp, err := larkauth.RequestAppRegistration(httpClient, larkBrand, f.IOStreams.ErrOut)
+	endpoints := core.ResolveEndpoints(larkBrand)
+	authResp, err := larkauth.RequestAppRegistration(httpClient, endpoints, f.IOStreams.ErrOut)
 	if err != nil {
 		return nil, output.ErrAuth("app registration failed: %v", err)
 	}
@@ -197,7 +198,7 @@ func runCreateAppFlow(ctx context.Context, f *cmdutil.Factory, brandOverride cor
 		fmt.Fprintf(f.IOStreams.ErrOut, "  %s\n\n", verificationURL)
 		fmt.Fprintf(f.IOStreams.ErrOut, "%s\n", msg.WaitingForScanNonTTY)
 	}
-	result, err := larkauth.PollAppRegistration(ctx, httpClient, core.BrandFeishu, authResp.DeviceCode, authResp.Interval, authResp.ExpiresIn, f.IOStreams.ErrOut)
+	result, err := larkauth.PollAppRegistration(ctx, httpClient, core.ResolveEndpoints(core.BrandFeishu), authResp.DeviceCode, authResp.Interval, authResp.ExpiresIn, f.IOStreams.ErrOut)
 	if err != nil {
 		return nil, output.ErrAuth("%v", err)
 	}
@@ -206,7 +207,7 @@ func runCreateAppFlow(ctx context.Context, f *cmdutil.Factory, brandOverride cor
 	// If tenant_brand=lark and no client_secret, retry with lark brand endpoint
 	if result.ClientSecret == "" && result.UserInfo != nil && result.UserInfo.TenantBrand == "lark" {
 		// fmt.Fprintf(f.IOStreams.ErrOut, "%s\n", msg.DetectedLarkTenant)
-		result, err = larkauth.PollAppRegistration(ctx, httpClient, core.BrandLark, authResp.DeviceCode, authResp.Interval, authResp.ExpiresIn, f.IOStreams.ErrOut)
+		result, err = larkauth.PollAppRegistration(ctx, httpClient, core.ResolveEndpoints(core.BrandLark), authResp.DeviceCode, authResp.Interval, authResp.ExpiresIn, f.IOStreams.ErrOut)
 		if err != nil {
 			return nil, output.ErrAuth("lark endpoint retry failed: %v", err)
 		}

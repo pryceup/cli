@@ -38,7 +38,7 @@ var DocsFetch = common.Shortcut{
 			args["limit"] = n
 		}
 		return common.NewDryRunAPI().
-			POST(common.MCPEndpoint(runtime.Config.Brand)).
+			POST(common.MCPEndpoint(runtime.Config.Endpoints)).
 			Desc("MCP tool: fetch-doc").
 			Body(map[string]interface{}{"method": "tools/call", "params": map[string]interface{}{"name": "fetch-doc", "arguments": args}}).
 			Set("mcp_tool", "fetch-doc").Set("args", args)

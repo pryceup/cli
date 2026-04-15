@@ -35,21 +35,24 @@ func Init() {
 	InitWithBrand(core.BrandFeishu)
 }
 
-// InitWithBrand initializes the registry by loading embedded data and optionally
-// overlaying cached remote data. The brand determines which remote API host to use.
+// InitWithEndpoints initializes the registry with custom endpoints.
 // It is safe to call multiple times (sync.Once).
-// Remote fetch errors are silently ignored when embedded data is available.
-// If no embedded data exists and no cache is found, a synchronous fetch is attempted.
-func InitWithBrand(brand core.LarkBrand) {
+func InitWithEndpoints(ep core.Endpoints) {
 	initOnce.Do(func() {
-		configuredBrand = brand
+		configuredEndpoints = ep
+		// Infer brand from endpoints for backward compatibility
+		if ep.Open == "https://open.larksuite.com" {
+			configuredBrand = core.BrandLark
+		} else {
+			configuredBrand = core.BrandFeishu
+		}
 		// 1. Load embedded meta_data.json as baseline (no-op if not compiled in)
 		loadEmbeddedIntoMerged()
 		// 2. Remote overlay
 		if remoteEnabled() && cacheWritable() {
 			// Check if brand changed since last cache
 			meta, metaErr := loadCacheMeta()
-			brandChanged := metaErr == nil && meta.Brand != "" && meta.Brand != string(brand)
+			brandChanged := metaErr == nil && meta.Brand != "" && meta.Brand != string(configuredBrand)
 
 			if !brandChanged {
 				if cached, err := loadCachedMerged(); err == nil {
@@ -67,6 +70,15 @@ func InitWithBrand(brand core.LarkBrand) {
 		// 3. Build sorted project list
 		rebuildProjectList()
 	})
+}
+
+// InitWithBrand initializes the registry by loading embedded data and optionally
+// overlaying cached remote data. The brand determines which remote API host to use.
+// It is safe to call multiple times (sync.Once).
+// Remote fetch errors are silently ignored when embedded data is available.
+// If no embedded data exists and no cache is found, a synchronous fetch is attempted.
+func InitWithBrand(brand core.LarkBrand) {
+	InitWithEndpoints(core.ResolveEndpoints(brand))
 }
 
 // loadEmbeddedIntoMerged parses the embedded meta_data.json and populates

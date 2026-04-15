@@ -21,8 +21,8 @@ import (
 
 const mcpErrorBodyLimit = 4000
 
-func MCPEndpoint(brand core.LarkBrand) string {
-	return core.ResolveEndpoints(brand).MCP + "/mcp"
+func MCPEndpoint(ep core.Endpoints) string {
+	return ep.MCP + "/mcp"
 }
 
 // CallMCPTool calls an MCP tool via JSON-RPC 2.0 and returns the parsed result.
@@ -37,7 +37,7 @@ func CallMCPTool(runtime *RuntimeContext, toolName string, args map[string]inter
 		return nil, output.ErrNetwork("failed to get HTTP client: %v", err)
 	}
 
-	raw, err := DoMCPCall(runtime.Ctx(), httpClient, toolName, args, accessToken, MCPEndpoint(runtime.Config.Brand), runtime.IsBot())
+	raw, err := DoMCPCall(runtime.Ctx(), httpClient, toolName, args, accessToken, MCPEndpoint(runtime.Config.Endpoints), runtime.IsBot())
 	if err != nil {
 		return nil, err
 	}

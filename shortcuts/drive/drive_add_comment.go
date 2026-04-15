@@ -119,7 +119,7 @@ var DriveAddComment = common.Shortcut{
 			commentBody = buildCommentCreateV2Request(targetFileType, anchorBlockIDForDryRun(blockID), replyElements)
 		}
 
-		mcpEndpoint := common.MCPEndpoint(runtime.Config.Brand)
+		mcpEndpoint := common.MCPEndpoint(runtime.Config.Endpoints)
 
 		dry := common.NewDryRunAPI()
 		switch {

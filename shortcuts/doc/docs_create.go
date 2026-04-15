@@ -43,7 +43,7 @@ var DocsCreate = common.Shortcut{
 	DryRun: func(ctx context.Context, runtime *common.RuntimeContext) *common.DryRunAPI {
 		args := buildDocsCreateArgs(runtime)
 		d := common.NewDryRunAPI().
-			POST(common.MCPEndpoint(runtime.Config.Brand)).
+			POST(common.MCPEndpoint(runtime.Config.Endpoints)).
 			Desc("MCP tool: create-doc").
 			Body(map[string]interface{}{"method": "tools/call", "params": map[string]interface{}{"name": "create-doc", "arguments": args}}).
 			Set("mcp_tool", "create-doc").Set("args", args)

@@ -16,6 +16,7 @@ func TestNewUATCallOptions(t *testing.T) {
 		AppID:      "app123",
 		AppSecret:  "secret",
 		Brand:      core.BrandLark,
+		Endpoints:  core.ResolveEndpoints(core.BrandLark),
 		UserOpenId: "ou_test",
 	}
 	errOut := &bytes.Buffer{}
@@ -28,8 +29,8 @@ func TestNewUATCallOptions(t *testing.T) {
 	if opts.AppSecret != "secret" {
 		t.Errorf("AppSecret = %q, want secret", opts.AppSecret)
 	}
-	if opts.Domain != core.BrandLark {
-		t.Errorf("Domain = %q, want lark", opts.Domain)
+	if opts.Endpoints.Open != "https://open.larksuite.com" {
+		t.Errorf("Endpoints.Open = %q, want https://open.larksuite.com", opts.Endpoints.Open)
 	}
 	if opts.UserOpenId != "ou_test" {
 		t.Errorf("UserOpenId = %q, want ou_test", opts.UserOpenId)
